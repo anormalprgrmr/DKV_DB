@@ -71,6 +71,7 @@ func GetDal(path string) (*dal, error) {
 			}
 
 		} else {
+			fmt.Printf("we are in else")
 			return
 		}
 
