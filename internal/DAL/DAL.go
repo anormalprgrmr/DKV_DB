@@ -7,7 +7,21 @@ import (
 	"sync"
 )
 
+type Options struct {
+	PageSize       int
+	MinFillPercent float32
+	MaxFillPercent float32
+}
+
+var DefaultOptions = &Options{
+	MinFillPercent: 0.5,
+	MaxFillPercent: 0.95,
+}
+
 type DAL struct {
+	minFillPercent float32
+	maxFillPercent float32
+
 	File     *os.File
 	PageSize int
 
@@ -20,13 +34,15 @@ var (
 	dalOnce     sync.Once
 )
 
-func GetDal(path string) (*DAL, error) {
+func GetDal(path string, option *Options) (*DAL, error) {
 	var err error
 	dalOnce.Do(func() {
 
 		dalInstance = &DAL{
-			meta:     GetMeta(),
-			PageSize: os.Getpagesize(),
+			meta:           GetMeta(),
+			PageSize:       os.Getpagesize(),
+			minFillPercent: option.MinFillPercent,
+			maxFillPercent: option.MaxFillPercent,
 		}
 
 		if _, err = os.Stat(path); err == nil {
@@ -125,7 +141,7 @@ func (d *DAL) WriteFreeList() (*page, error) {
 }
 
 func (d *DAL) ReadFreeList() (*freeList, error) {
-	p, err := d.ReadPage(d.FreeListPage)
+	p, err := d.ReadPage(d.meta.FreeListPage)
 	if err != nil {
 		return nil, err
 	}
@@ -133,4 +149,37 @@ func (d *DAL) ReadFreeList() (*freeList, error) {
 	freelist := GetFreeList()
 	freelist.Deserialize(p.Data)
 	return freelist, nil
+}
+
+func (d *DAL) maxThreshold() float32 {
+	return d.maxFillPercent * float32(d.PageSize)
+}
+
+func (d *DAL) isOverPopulated(node *Node) bool {
+	return float32(node.nodeSize()) > d.maxThreshold()
+}
+
+func (d *DAL) minThreshold() float32 {
+	return d.minFillPercent * float32(d.PageSize)
+}
+
+func (d *DAL) isUnderPopulated(node *Node) bool {
+	return float32(node.nodeSize()) < d.minThreshold()
+}
+
+func (d *DAL) getSplitIndex(node *Node) int {
+	size := 0
+	size += NodeHeaderSize
+
+	for i := range node.Items {
+		size += node.elementSize(i)
+
+		// if we have a big enough page size (more than minimum), and didn't reach the last node, which means we can
+		// spare an element
+		if float32(size) > d.minThreshold() && i < len(node.Items)-1 {
+			return i + 1
+		}
+	}
+
+	return -1
 }

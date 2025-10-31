@@ -3,11 +3,12 @@ package api
 import (
 	"net/http"
 
+	dal "github.com/anormalprgrmr/DKV_DB/internal/DAL"
 	"github.com/gin-gonic/gin"
 	// For access to api.DB
 )
 
-func InitRoutes(r *gin.Engine) *gin.Engine {
+func InitRoutes(col *dal.Collection, r *gin.Engine) *gin.Engine {
 
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -22,7 +23,7 @@ func InitRoutes(r *gin.Engine) *gin.Engine {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "key and value required"})
 			return
 		}
-		err := DB.Put([]byte(key), []byte(value))
+		err := col.Put([]byte(key), []byte(value))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		} else {
@@ -36,11 +37,11 @@ func InitRoutes(r *gin.Engine) *gin.Engine {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "key required"})
 			return
 		}
-		value, found := DB.Get([]byte(key))
-		if !found {
+		item, err := col.Find([]byte(key))
+		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		} else {
-			c.JSON(http.StatusOK, gin.H{"value": string(value)})
+			c.JSON(http.StatusOK, gin.H{"value": string(item.Value)})
 		}
 	})
 
