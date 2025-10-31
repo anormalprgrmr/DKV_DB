@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-type dal struct {
+type DAL struct {
 	File     *os.File
 	PageSize int
 
@@ -16,15 +16,15 @@ type dal struct {
 }
 
 var (
-	dalInstance *dal
+	dalInstance *DAL
 	dalOnce     sync.Once
 )
 
-func GetDal(path string) (*dal, error) {
+func GetDal(path string) (*DAL, error) {
 	var err error
 	dalOnce.Do(func() {
 
-		dalInstance = &dal{
+		dalInstance = &DAL{
 			meta:     GetMeta(),
 			PageSize: os.Getpagesize(),
 		}
@@ -79,7 +79,7 @@ func GetDal(path string) (*dal, error) {
 	return dalInstance, err
 }
 
-func (d *dal) Close() error {
+func (d *DAL) Close() error {
 	if d.File != nil {
 		err := d.File.Close()
 		if err != nil {
@@ -88,7 +88,7 @@ func (d *dal) Close() error {
 	}
 	return nil
 }
-func (d *dal) WriteMeta(meta *meta) (*page, error) {
+func (d *DAL) WriteMeta(meta *meta) (*page, error) {
 	p := d.AllocateEmptyPage()
 	p.Num = 0
 	meta.Serialize(p.Data)
@@ -100,7 +100,7 @@ func (d *dal) WriteMeta(meta *meta) (*page, error) {
 	return p, nil
 }
 
-func (d *dal) ReadMeta() (*meta, error) {
+func (d *DAL) ReadMeta() (*meta, error) {
 	p, err := d.ReadPage(0)
 	if err != nil {
 		return nil, err
@@ -111,7 +111,7 @@ func (d *dal) ReadMeta() (*meta, error) {
 	return meta, nil
 }
 
-func (d *dal) WriteFreeList() (*page, error) {
+func (d *DAL) WriteFreeList() (*page, error) {
 	p := d.AllocateEmptyPage()
 	p.Num = d.FreeListPage
 	d.freeList.Serialize(p.Data)
@@ -124,7 +124,7 @@ func (d *dal) WriteFreeList() (*page, error) {
 	return p, nil
 }
 
-func (d *dal) ReadFreeList() (*freeList, error) {
+func (d *DAL) ReadFreeList() (*freeList, error) {
 	p, err := d.ReadPage(d.FreeListPage)
 	if err != nil {
 		return nil, err
