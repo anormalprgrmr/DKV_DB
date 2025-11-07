@@ -17,8 +17,6 @@ WORKDIR /app
 
 COPY --from=builder /app/dkvdb .
 
-COPY db.db ./
-
 EXPOSE 3000
 
 CMD ["./dkvdb"]
