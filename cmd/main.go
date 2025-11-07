@@ -14,7 +14,12 @@ func main() {
 		MinFillPercent: 0.0125,
 		MaxFillPercent: 0.025,
 	}
-	db, _ := dal.GetDal("./mainTest", options)
+	db_path, exists := os.LookupEnv("DB_PATH")
+	if !exists {
+    		db_path = "./mainTest"
+	}
+
+	db, _ := dal.GetDal(db_path, options)
 	defer db.Close()
 
 	c := dal.NewCollection([]byte("collection1"), db.Root)
