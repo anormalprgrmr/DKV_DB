@@ -1,42 +1,34 @@
 package main
 
-import dal "github.com/anormalprgrmr/DKV_DB/internal/DAL"
+import (
+	"os"
+
+	api "github.com/anormalprgrmr/DKV_DB/internal/API"
+	dal "github.com/anormalprgrmr/DKV_DB/internal/DAL"
+)
 
 func main() {
-	// initialize db
-	dalIns, _ := dal.GetDal("db.db")
 
-	// create a new page
-	p := dalIns.AllocateEmptyPage()
-	p.Num = dalIns.GetNextPage()
-	println("next pageee iss in start : ", p.Num)
-	copy(p.Data[:], "data")
+	options := &dal.Options{
+		PageSize:       os.Getpagesize(),
+		MinFillPercent: 0.0125,
+		MaxFillPercent: 0.025,
+	}
+	db, _ := dal.GetDal("./mainTest", options)
+	defer db.Close()
 
-	// commit it
-	_ = dalIns.WritePage(p)
-	_, _ = dalIns.WriteFreeList()
-	println("next pageee iss phase 1 finish: ", dalIns.GetNextPage())
+	c := dal.NewCollection([]byte("collection1"), db.Root)
+	c.DAL = db
+	api.RunServer(c, 8080)
 
-	// Close the db
-	_ = dalIns.Close()
+	// dal, _ := dal.GetDal("mainTest")
 
-	// We expect the freelist state was saved, so we write to
-	// page number 3 and not overwrite the one at number 2
-	println("going to teset2")
-	dalIns, _ = dal.GetDal("db.db")
-	println("next pageee iss phase 2 start: ", dalIns.GetNextPage())
-	p = dalIns.AllocateEmptyPage()
-	p.Num = dalIns.GetNextPage()
-	copy(p.Data[:], "data2")
-	_ = dalIns.WritePage(p)
+	// node, _ := dal.GetNode(dal.Root)
+	// node.DAL = dal
+	// index, containingNode, _ := node.FindKey([]byte("Key1"))
+	// res := containingNode.Items[index]
 
-	// // Create a page and free it so the released pages will be updated
-	pageNum := dalIns.GetNextPage()
-	println("next pageee iss : ", pageNum)
-	dalIns.ReleasePage(pageNum)
-	println("next pageee iss after release : ", pageNum)
-
-	// // commit it
-	_, _ = dalIns.WriteFreeList()
-	println("finiished")
+	// fmt.Printf("\n key is: %s, value is: %s", res.Key, res.Value)
+	// // Close the db
+	// _ = dal.Close()
 }

@@ -5,13 +5,13 @@ type page struct {
 	Data []byte
 }
 
-func (d *dal) AllocateEmptyPage() *page {
+func (d *DAL) AllocateEmptyPage() *page {
 	return &page{
 		Data: make([]byte, d.PageSize),
 	}
 }
 
-func (d *dal) ReadPage(pageNumber uint64) (*page, error) {
+func (d *DAL) ReadPage(pageNumber uint64) (*page, error) {
 
 	p := d.AllocateEmptyPage()
 
@@ -25,7 +25,7 @@ func (d *dal) ReadPage(pageNumber uint64) (*page, error) {
 	return p, err
 }
 
-func (d *dal) WritePage(p *page) error {
+func (d *DAL) WritePage(p *page) error {
 
 	offset := p.Num * uint64(d.PageSize)
 	_, err := d.File.WriteAt(p.Data, int64(offset))

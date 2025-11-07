@@ -7,7 +7,21 @@ import (
 	"sync"
 )
 
-type dal struct {
+type Options struct {
+	PageSize       int
+	MinFillPercent float32
+	MaxFillPercent float32
+}
+
+var DefaultOptions = &Options{
+	MinFillPercent: 0.5,
+	MaxFillPercent: 0.95,
+}
+
+type DAL struct {
+	minFillPercent float32
+	maxFillPercent float32
+
 	File     *os.File
 	PageSize int
 
@@ -16,17 +30,19 @@ type dal struct {
 }
 
 var (
-	dalInstance *dal
+	dalInstance *DAL
 	dalOnce     sync.Once
 )
 
-func GetDal(path string) (*dal, error) {
+func GetDal(path string, option *Options) (*DAL, error) {
 	var err error
 	dalOnce.Do(func() {
 
-		dalInstance = &dal{
-			meta:     GetMeta(),
-			PageSize: os.Getpagesize(),
+		dalInstance = &DAL{
+			meta:           GetMeta(),
+			PageSize:       os.Getpagesize(),
+			minFillPercent: option.MinFillPercent,
+			maxFillPercent: option.MaxFillPercent,
 		}
 
 		if _, err = os.Stat(path); err == nil {
@@ -71,6 +87,7 @@ func GetDal(path string) (*dal, error) {
 			}
 
 		} else {
+			fmt.Printf("we are in else")
 			return
 		}
 
@@ -78,7 +95,7 @@ func GetDal(path string) (*dal, error) {
 	return dalInstance, err
 }
 
-func (d *dal) Close() error {
+func (d *DAL) Close() error {
 	if d.File != nil {
 		err := d.File.Close()
 		if err != nil {
@@ -87,7 +104,7 @@ func (d *dal) Close() error {
 	}
 	return nil
 }
-func (d *dal) WriteMeta(meta *meta) (*page, error) {
+func (d *DAL) WriteMeta(meta *meta) (*page, error) {
 	p := d.AllocateEmptyPage()
 	p.Num = 0
 	meta.Serialize(p.Data)
@@ -99,7 +116,7 @@ func (d *dal) WriteMeta(meta *meta) (*page, error) {
 	return p, nil
 }
 
-func (d *dal) ReadMeta() (*meta, error) {
+func (d *DAL) ReadMeta() (*meta, error) {
 	p, err := d.ReadPage(0)
 	if err != nil {
 		return nil, err
@@ -110,7 +127,7 @@ func (d *dal) ReadMeta() (*meta, error) {
 	return meta, nil
 }
 
-func (d *dal) WriteFreeList() (*page, error) {
+func (d *DAL) WriteFreeList() (*page, error) {
 	p := d.AllocateEmptyPage()
 	p.Num = d.FreeListPage
 	d.freeList.Serialize(p.Data)
@@ -123,8 +140,8 @@ func (d *dal) WriteFreeList() (*page, error) {
 	return p, nil
 }
 
-func (d *dal) ReadFreeList() (*freeList, error) {
-	p, err := d.ReadPage(d.FreeListPage)
+func (d *DAL) ReadFreeList() (*freeList, error) {
+	p, err := d.ReadPage(d.meta.FreeListPage)
 	if err != nil {
 		return nil, err
 	}
@@ -132,4 +149,37 @@ func (d *dal) ReadFreeList() (*freeList, error) {
 	freelist := GetFreeList()
 	freelist.Deserialize(p.Data)
 	return freelist, nil
+}
+
+func (d *DAL) maxThreshold() float32 {
+	return d.maxFillPercent * float32(d.PageSize)
+}
+
+func (d *DAL) isOverPopulated(node *Node) bool {
+	return float32(node.nodeSize()) > d.maxThreshold()
+}
+
+func (d *DAL) minThreshold() float32 {
+	return d.minFillPercent * float32(d.PageSize)
+}
+
+func (d *DAL) isUnderPopulated(node *Node) bool {
+	return float32(node.nodeSize()) < d.minThreshold()
+}
+
+func (d *DAL) getSplitIndex(node *Node) int {
+	size := 0
+	size += NodeHeaderSize
+
+	for i := range node.Items {
+		size += node.elementSize(i)
+
+		// if we have a big enough page size (more than minimum), and didn't reach the last node, which means we can
+		// spare an element
+		if float32(size) > d.minThreshold() && i < len(node.Items)-1 {
+			return i + 1
+		}
+	}
+
+	return -1
 }
