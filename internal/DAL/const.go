@@ -1,7 +1,14 @@
 package dal
 
-// All size numbers are in bytes
+import "errors"
+
 const (
-	PageNumSize    = 8
-	NodeHeaderSize = 3
+	magicNumberSize = 4
+	counterSize = 4
+	nodeHeaderSize = 3
+
+	collectionSize = 16
+	pageNumSize    = 8
 )
+
+var writeInsideReadTxErr = errors.New("can't perform a write operation inside a read transaction")

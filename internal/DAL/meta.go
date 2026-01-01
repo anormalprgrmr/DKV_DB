@@ -1,44 +1,50 @@
 package dal
 
-import (
-	"encoding/binary"
-	"sync"
+import "encoding/binary"
+
+const (
+	magicNumber uint32 = 0xD00DB00D
+	metaPageNum = 0
 )
 
+// meta is the meta page of the db
 type meta struct {
-	FreeListPage uint64
-	Root         uint64
+	// The database has a root collection that holds all the collections in the database. It is called root and the
+	// root property of meta holds page number containing the root of collections collection. The keys are the
+	// collections names and the values are the page number of the root of each collection. Then, once the collection
+	// and the root page are located, a search inside a collection can be made.
+	root         pgnum
+	freelistPage pgnum
 }
 
-var (
-	MetaInstance *meta
-	MetaOnce     sync.Once
-)
-
-func GetMeta() *meta {
-	MetaOnce.Do(func() {
-		MetaInstance = &meta{}
-	})
-
-	return MetaInstance
+func newEmptyMeta() *meta {
+	return &meta{}
 }
 
-func (m *meta) Serialize(buf []byte) {
+func (m *meta) serialize(buf []byte) {
 	pos := 0
+	binary.LittleEndian.PutUint32(buf[pos:], magicNumber)
+	pos += magicNumberSize
 
-	binary.LittleEndian.PutUint64(buf[pos:], uint64(m.Root))
-	pos += PageNumSize
+	binary.LittleEndian.PutUint64(buf[pos:], uint64(m.root))
+	pos += pageNumSize
 
-	binary.LittleEndian.PutUint64(buf[pos:], uint64(m.FreeListPage))
-	pos += PageNumSize
+	binary.LittleEndian.PutUint64(buf[pos:], uint64(m.freelistPage))
+	pos += pageNumSize
 }
 
-func (m *meta) Deserialize(buf []byte) {
+func (m *meta) deserialize(buf []byte) {
 	pos := 0
+	magicNumberRes := binary.LittleEndian.Uint32(buf[pos:])
+	pos += magicNumberSize
 
-	m.Root = uint64(binary.LittleEndian.Uint64(buf[pos:]))
-	pos += PageNumSize
+	if magicNumberRes != magicNumber {
+		panic("The file is not a libra db file")
+	}
 
-	m.FreeListPage = uint64(binary.LittleEndian.Uint64(buf[pos:]))
-	pos += PageNumSize
+	m.root = pgnum(binary.LittleEndian.Uint64(buf[pos:]))
+	pos += pageNumSize
+
+	m.freelistPage = pgnum(binary.LittleEndian.Uint64(buf[pos:]))
+	pos += pageNumSize
 }
