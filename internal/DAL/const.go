@@ -11,4 +11,5 @@ const (
 	pageNumSize    = 8
 )
 
+const DEFAULT_COLLECTION = "default"
 var writeInsideReadTxErr = errors.New("can't perform a write operation inside a read transaction")

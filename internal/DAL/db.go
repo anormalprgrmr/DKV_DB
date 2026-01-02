@@ -29,12 +29,12 @@ func (db *DB) Close() error {
 	return db.close()
 }
 
-func (db *DB) ReadTx() *tx {
+func (db *DB) ReadTx() *Tx {
 	db.rwlock.RLock()
 	return newTx(db, false)
 }
 
-func (db *DB) WriteTx() *tx {
+func (db *DB) WriteTx() *Tx {
 	db.rwlock.Lock()
 	return newTx(db, true)
 }
