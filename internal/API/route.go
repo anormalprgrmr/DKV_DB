@@ -1,47 +1,105 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 
 	dal "github.com/anormalprgrmr/DKV_DB/internal/DAL"
 	"github.com/gin-gonic/gin"
+	grpc "github.com/anormalprgrmr/DKV_DB/internal/grpc"
 	// For access to api.DB
 )
 
-func InitRoutes(col *dal.Collection, r *gin.Engine) *gin.Engine {
+type PutRequestPayload struct {
+	Key   string `json:"key" binding:"required"`
+	Value string `json:"value" binding:"required"`
+}
 
+var db *dal.DB = nil
+
+func revertChange(key string) error {
+	// TODO: implement reverting
+	return nil
+}
+func InitRoutes(_db *dal.DB, r *gin.Engine) *gin.Engine {
+	db = _db
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "pong",
 		})
 	})
 
-	r.PUT("/put", func(c *gin.Context) {
-		key := c.Query("key")
-		value := c.Query("value")
-		if key == "" || value == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "key and value required"})
+	r.PUT("/objects", func(c *gin.Context) {
+		var payload PutRequestPayload
+		var err error
+		if err := c.ShouldBindJSON(&payload); err != nil {
+			// If binding fails (missing key or value, wrong format, etc.)
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Invalid JSON body",
+			})
 			return
 		}
-		err := col.Put([]byte(key), []byte(value))
+		tx := db.WriteTx()
+		col, err := tx.GetCollection([]byte(dal.DEFAULT_COLLECTION))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		} else {
-			c.JSON(http.StatusOK, gin.H{"message": "ok"})
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "default collection does not exist",
+			})
+			return 
 		}
+		//1. set
+		err = col.Put([]byte(payload.Key), []byte(payload.Value))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "can't put key/value in master",
+			})
+			return 
+		}
+		// 2. Commit
+		err = tx.Commit()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "can't commit in master",
+			})
+			return 
+			
+		}
+		// 3. replicate
+		err = grpc.ReplicaSet(payload.Key, payload.Value)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "can't set in replicas",
+			})
+			// revert change in master
+			_ = revertChange(payload.Key)
+			return 
+		}
+		
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	})
 
-	r.GET("/get", func(c *gin.Context) {
-		key := c.Query("key")
+	r.GET("/objects/:key", func(c *gin.Context) {
+		key := c.Param("key")
 		if key == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "key required"})
 			return
 		}
-		item, err := col.Find([]byte(key))
+		fmt.Printf("key: %v \n", key)
+		tx := db.ReadTx()
+		col, err := tx.GetCollection([]byte(dal.DEFAULT_COLLECTION))
+		fmt.Println("HERE!!!")
 		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "default collection does not exist",
+			})
+			return 
+		}
+		item , err := col.Find([]byte(key))
+		if err != nil || item == nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		} else {
-			c.JSON(http.StatusOK, gin.H{"value": string(item.Value)})
+			fmt.Println(item)
+			c.JSON(http.StatusOK, gin.H{"value": string(item.Value())})
 		}
 	})
 

@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package dkvdb_service;
+
+option go_package = "github.com/anormalprgrmr/DKV_DB/proto;dkvdb_service";
+
+service DKVDBService {
+  rpc Set(SetRequest) returns (Status);
+  rpc Commit(TxRequest) returns (Status);
+  rpc Abort(TxRequest) returns (Status);
+}
+
+message SetRequest {
+  string key = 1;
+  string value = 2;
+  uint64 id = 3;
+}
+
+message TxRequest {
+  uint64 id = 1;
+}
+
+message Status {
+  bool success = 1;
+  string message = 2;
+}
