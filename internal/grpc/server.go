@@ -64,8 +64,11 @@ func (s *kvServer) Abort(ctx context.Context, req *pb.TxRequest) (*pb.Status, er
 	}, nil
 }
 
-func Server_main(_db *dal.DB, port string) {
+var is_master bool
+func Server_main(_db *dal.DB, port string, _is_master bool) {
+	is_master = _is_master
 	db = _db
+	tx_map = make(map[uint64]*dal.Tx)
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
@@ -74,7 +77,7 @@ func Server_main(_db *dal.DB, port string) {
 	grpcServer := grpc.NewServer()
 	pb.RegisterDKVDBServiceServer(grpcServer, &kvServer{})
 
-	log.Println("gRPC server listening on :50051")
+	log.Printf("gRPC server listening on %v\n",port)
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}

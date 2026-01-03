@@ -1,14 +1,15 @@
 package main
 
 import (
-	"os"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"log"
+	"os"
+
 	api "github.com/anormalprgrmr/DKV_DB/internal/API"
 	dal "github.com/anormalprgrmr/DKV_DB/internal/DAL"
 	grpc "github.com/anormalprgrmr/DKV_DB/internal/grpc"
-	"fmt"
-	"strconv"
 )
 const (
 	DEFAULT_HTTP_PORT = 8080
@@ -38,6 +39,8 @@ func LoadConfig(filename string) ([]ReplicaConfig, error) {
 	}
 	return configs, nil
 }
+
+var is_master bool
 func main() {
 
 	options := &dal.Options{
@@ -54,7 +57,7 @@ func main() {
 	defer db.Close()
 	
 	tx := db.WriteTx()
-	_ , _ = tx.CreateCollection([]byte("collection1"))
+	_ , _ = tx.CreateCollection([]byte(dal.DEFAULT_COLLECTION))
 	_ = tx.Commit()
 
 	replica_configs, err := LoadConfig("replica.json")
@@ -63,11 +66,16 @@ func main() {
 		return
 	}
 	for _, cfg := range replica_configs {
+		log.Println(cfg.Address)
 		grpc.AddReplica(cfg.Address)
 	}
-	http_port_str := os.Getenv("HTTP_PORT")
-	http_port, err := strconv.Atoi(http_port_str)
+	http_port := os.Getenv("HTTP_PORT")
 	grpc_port := os.Getenv("GRPC_PORT")
-	go grpc.Server_main(db, grpc_port)
-	api.RunServer(db, http_port)
+
+	_, is_master = os.LookupEnv("IS_MASTER")
+	if is_master {
+		log.Println("Running in master mode...")
+	}
+	go grpc.Server_main(db, grpc_port, is_master)
+	api.RunServer(db, http_port, is_master)
 }

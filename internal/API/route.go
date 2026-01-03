@@ -15,14 +15,12 @@ type PutRequestPayload struct {
 	Value string `json:"value" binding:"required"`
 }
 
-var db *dal.DB = nil
 
 func revertChange(key string) error {
 	// TODO: implement reverting
 	return nil
 }
-func InitRoutes(_db *dal.DB, r *gin.Engine) *gin.Engine {
-	db = _db
+func InitRoutes(db *dal.DB, r *gin.Engine) *gin.Engine {
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "pong",
@@ -30,6 +28,12 @@ func InitRoutes(_db *dal.DB, r *gin.Engine) *gin.Engine {
 	})
 
 	r.PUT("/objects", func(c *gin.Context) {
+		if !is_master {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Can't Set in Replica",
+			})
+			return
+		}
 		var payload PutRequestPayload
 		var err error
 		if err := c.ShouldBindJSON(&payload); err != nil {
@@ -39,6 +43,7 @@ func InitRoutes(_db *dal.DB, r *gin.Engine) *gin.Engine {
 			})
 			return
 		}
+
 		tx := db.WriteTx()
 		col, err := tx.GetCollection([]byte(dal.DEFAULT_COLLECTION))
 		if err != nil {
@@ -87,7 +92,6 @@ func InitRoutes(_db *dal.DB, r *gin.Engine) *gin.Engine {
 		fmt.Printf("key: %v \n", key)
 		tx := db.ReadTx()
 		col, err := tx.GetCollection([]byte(dal.DEFAULT_COLLECTION))
-		fmt.Println("HERE!!!")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "default collection does not exist",
@@ -101,6 +105,7 @@ func InitRoutes(_db *dal.DB, r *gin.Engine) *gin.Engine {
 			fmt.Println(item)
 			c.JSON(http.StatusOK, gin.H{"value": string(item.Value())})
 		}
+		tx.Rollback()
 	})
 
 	return r

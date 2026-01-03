@@ -18,7 +18,7 @@ var replicas []replica
 
 func AddReplica(address string) error {
 	//var r replica
-	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
+	conn, err := grpc.Dial(address, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 		return errors.New("Couldn't connect to replica")
@@ -40,8 +40,12 @@ func ReplicaSet(key string, value string) error {
 	var ar []replica 
 	var abort = false
 	for i , r := range replicas {
-		resp, _ := r.client.Set(ctx, &setRequest)
+		log.Println("HERE")
+		resp, e := r.client.Set(ctx, &setRequest)
+		log.Println(resp,e)
+		log.Println("HERE!")
 		if !resp.Success {
+			log.Println("HERE!")
 			log.Printf("set in replica %v failed\n", i)
 			abort = true
 			break;

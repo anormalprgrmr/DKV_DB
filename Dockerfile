@@ -16,5 +16,6 @@ FROM alpine:latest
 WORKDIR /app
 
 COPY --from=builder /app/dkvdb .
+COPY --from=builder /app/replica.json .
 
 CMD ["./dkvdb"]
