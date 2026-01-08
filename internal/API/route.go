@@ -16,10 +16,6 @@ type PutRequestPayload struct {
 	Value string `json:"value" binding:"required"`
 }
 
-func revertChange(key string) error {
-	// TODO: implement reverting
-	return nil
-}
 func InitRoutes(db *dal.DB, r *gin.Engine) *gin.Engine {
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
