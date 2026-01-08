@@ -3,10 +3,11 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"os"
 
 	dal "github.com/anormalprgrmr/DKV_DB/internal/DAL"
-	"github.com/gin-gonic/gin"
 	grpc "github.com/anormalprgrmr/DKV_DB/internal/grpc"
+	"github.com/gin-gonic/gin"
 	// For access to api.DB
 )
 
@@ -14,7 +15,6 @@ type PutRequestPayload struct {
 	Key   string `json:"key" binding:"required"`
 	Value string `json:"value" binding:"required"`
 }
-
 
 func revertChange(key string) error {
 	// TODO: implement reverting
@@ -50,36 +50,37 @@ func InitRoutes(db *dal.DB, r *gin.Engine) *gin.Engine {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "default collection does not exist",
 			})
-			return 
+			return
 		}
+
 		//1. set
 		err = col.Put([]byte(payload.Key), []byte(payload.Value))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "can't put key/value in master",
 			})
-			return 
+			return
 		}
-		// 2. Commit
-		err = tx.Commit()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "can't commit in master",
-			})
-			return 
-			
-		}
-		// 3. replicate
+		// 2. replicate
 		err = grpc.ReplicaSet(payload.Key, payload.Value)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "can't set in replicas",
 			})
 			// revert change in master
-			_ = revertChange(payload.Key)
-			return 
+			tx.Rollback()
+			return
 		}
-		
+		// 3. Commit
+		err = tx.Commit()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "can't commit in master",
+			})
+			os.Exit(-1)
+
+		}
+
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	})
 
@@ -96,9 +97,9 @@ func InitRoutes(db *dal.DB, r *gin.Engine) *gin.Engine {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "default collection does not exist",
 			})
-			return 
+			return
 		}
-		item , err := col.Find([]byte(key))
+		item, err := col.Find([]byte(key))
 		if err != nil || item == nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		} else {
